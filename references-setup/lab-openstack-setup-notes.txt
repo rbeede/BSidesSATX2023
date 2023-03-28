@@ -1,0 +1,121 @@
+# SAIO documentation was very out of date and assumed dev work on swift itself
+# Modified build with Ubuntu 22.04 LTS Server 64-bit
+#	http://greenstack.die.upm.es/2015/06/02/openstack-essentials-part-2-installing-swift-on-ubuntu/
+#
+
+# docker options existed but did not make it easy to modify with a "vuln" API
+
+
+
+apt-get update; apt-get -y dist-upgrade; apt-get -y autoremove; apt-get clean
+
+apt-get -y install swift-proxy
+apt-get -y install  swift-account swift-container swift-object
+
+apt-get -y install swift
+
+mkdir -p /var/run/swift
+chown swift:swift /var/run/swift
+
+mkdir -p /srv/node/vda1
+# while NOT mounted, these perms ensure openstack swift only works when successfully started later
+chown root:root /srv/node/vda1
+chmod 0000 /srv/node/vda1
+
+cd /etc/swift/
+
+openssl req -x509 -newkey rsa:4096 -nodes -out cert.crt -keyout cert.key -days 3653 -subj "/CN=lab.openstack.swift.cloud.localtest.me"
+
+mkdir -p /var/cache/swift && chown swift:swift /var/cache/swift
+apt-get -y install memcached
+
+swift-ring-builder account.builder create 7 1 1
+swift-ring-builder container.builder create 7 1 1
+swift-ring-builder object.builder create 7 1 1
+export ZONE=1
+export STORAGE_LOCAL_NET_IP=127.0.0.1
+export WEIGHT=100
+export DEVICE=vda1
+swift-ring-builder account.builder add z$ZONE-$STORAGE_LOCAL_NET_IP:6002/$DEVICE $WEIGHT
+swift-ring-builder container.builder add z$ZONE-$STORAGE_LOCAL_NET_IP:6001/$DEVICE $WEIGHT
+swift-ring-builder object.builder add z$ZONE-$STORAGE_LOCAL_NET_IP:6000/$DEVICE $WEIGHT
+swift-ring-builder account.builder
+swift-ring-builder container.builder
+swift-ring-builder object.builder
+
+swift-ring-builder account.builder rebalance
+swift-ring-builder container.builder rebalance
+swift-ring-builder object.builder rebalance
+
+
+truncate -s 5G /srv/swift-disk
+mkfs.xfs /srv/swift-disk
+
+echo "" >> /etc/fstab
+echo "/srv/swift-disk	/srv/node/vda1	xfs	loop,noatime	0	0" >> /etc/fstab
+
+mount -a
+
+# WHILE mounted
+chown swift:swift /srv/node/vda1
+
+
+
+
+swift-init all stop
+
+#########
+#########
+## From the repo dir #openstack-demo/etc_swift-confs/# install into /etc/swift/ all the conf files
+#########
+#########
+
+
+
+swift-init all start
+
+
+################## WARNING - THESE ARE WINDOWS POWERSHELL FORMAT
+
+echo $Env:USERNAME > sample_object.txt
+
+
+# From the repo directory #openstack-demo/demo-testdata/#
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass upload bsides-workshop sample_object.txt
+
+
+
+
+# setup XSS example
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass delete fileuploads
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass upload fileuploads .\sample_object.txt
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass upload fileuploads .\sugarskull-2019_orig.png
+
+
+
+# setup IAM examples
+
+# Base check that accounts work
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else list
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen list
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected delete deptdocs
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected upload deptdocs .\sugarskull-2019_orig.png
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected upload deptdocs .\sample_object.txt
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else delete research 
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else upload research .\super-secret-doc-for-account2-only.txt
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else upload research ".\initials profile picture - small.png"
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else upload research ".\fyi emoji.png"
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen delete warez
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen upload warez .\pumpkin.JPG
+

