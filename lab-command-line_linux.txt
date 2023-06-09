@@ -1,7 +1,7 @@
 # Assumes Linux
 
 
-export LAB_OPENSTACK_IP=172.31.26.154
+export LAB_OPENSTACK_IP=198.51.100.210
 
 
 ping -c 2 $LAB_OPENSTACK_IP
