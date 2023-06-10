@@ -33,7 +33,7 @@ def main(argv):
     }
 
     custom_handler = HandlerFactory(container, swift_opts)
-    http_daemon = http.server.HTTPServer(
+    http_daemon = http.server.ThreadingHTTPServer(
         ("", port),  # All IPv6 or IPv4 interfaces
         custom_handler
     )
